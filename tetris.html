@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tetris Game</title>
+    <!-- <link rel="stylesheet" href="styles.css"> -->
+    <style>
+        body {
+            background-color: #a600ff;
+            display: flex;
+            justify-content: space-evenly;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        h1{font-size: 32px;
+        font-weight: 600;}
+
+        #help {
+            font-size: 18px;
+            word-wrap: break-word;
+            color: white;
+        }
+
+        #help ul {
+            list-style: none;
+        }
+
+        #help kbd {
+            font-size: 40px;
+            font-weight: 600;
+        }
+
+        #game-container {
+            margin-top: 20px;
+            border: 20px double #333;
+            border-radius: 20px;
+            background-color: #fff;
+            width: 500px;
+            text-align: center;
+            box-shadow: 0 10px 20px #c2c0c4;
+        }
+
+        canvas {
+            display: block;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="help">
+        <h2><strong>Controls:</strong></h2>
+        <ul>
+            <li><kbd>&uarr;</kbd>: Rotate the current piece clockwise.</li>
+            <li><kbd>&darr;</kbd>: Quick Move the current piece downwards.</li>
+            <li><kbd>&larr;</kbd> <kbd>&rarr;</kbd>: Move the current piece left/right.</li>
+            <li><kbd>Spacebar</kbd>: Pause/Resume the Game.</li>
+        </ul>
+    </div>
+    <div id="game-container">
+        <h1 class="text-center">Classic Tetris Game</h1>
+        <canvas id="gameCanvas" width="500" height="500"></canvas>
+    </div>
+
+
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+    <script>
+        ///Code by Sukant-github-Cybogeek, Youtube TechnoSpace...
+        $(document).ready(function () {
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+            const BLOCK_SIZE = 20;
+            const ROWS = canvas.height / BLOCK_SIZE;
+            const COLUMNS = canvas.width / BLOCK_SIZE;
+
+            const board = [];
+            let currentPiece;
+            let intervalId;
+            let score = 0;
+            let isPaused = false;
+
+            // Tetris shapes
+            const shapes = [
+                [[1, 1, 1], [1, 0, 0]], // L shape
+                [[1, 1, 1], [0, 1, 0]], // T shape
+                [[1, 1, 1, 1]],         // I shape
+                [[1, 1], [1, 1]],       // Square shape
+                [[0, 1, 1], [1, 1, 0]]  // Z shape
+            ];
+
+            // Initialize the game
+            function init() {
+                canvas.width = COLUMNS * BLOCK_SIZE;
+                canvas.height = ROWS * BLOCK_SIZE;
+                createBoard();
+                newPiece();
+                draw();
+                intervalId = setInterval(update, 400);//Control the Falling Speed
+            }
+
+            // Create the game board
+            function createBoard() {
+                for (let row = 0; row < ROWS; row++) {
+                    board[row] = [];
+                    for (let col = 0; col < COLUMNS; col++) {
+                        board[row][col] = 0;
+                    }
+                }
+            }
+
+            // Generate a new Tetris piece
+            function newPiece() {
+                currentPiece = {
+                    x: Math.floor(COLUMNS / 2) - 1,
+                    y: 0,
+                    shape: getRandomShape(), // Get a random shape
+                };
+                if (!canMoveDown()) {
+                    clearInterval(intervalId);
+                    playAudio('explosion.wav');
+                    alert("Game Over! Your score: " + score);
+                }
+            }
+
+            // Get a random Tetris shape
+            function getRandomShape() {
+                const index = Math.floor(Math.random() * shapes.length);
+                return shapes[index];
+            }
+
+            // Draw the game board and current piece
+            function draw() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                drawBoard();
+                drawPiece();
+                drawScore();
+                drawPause();
+            }
+
+            // Draw the game board
+            function drawBoard() {
+                for (let row = 0; row < ROWS; row++) {
+                    for (let col = 0; col < COLUMNS; col++) {
+                        if (board[row][col]) {
+                            ctx.fillStyle = '#333'; // Color of filled blocks
+                            ctx.fillRect(col * BLOCK_SIZE, row * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+                        }
+                    }
+                }
+            }
+
+            // Draw the current Tetris piece
+            function drawPiece() {
+                ctx.fillStyle = '#ff0000'; // Color of current piece
+                currentPiece.shape.forEach((row, rowIndex) => {
+                    row.forEach((block, colIndex) => {
+                        if (block) {
+                            const x = currentPiece.x + colIndex;
+                            const y = currentPiece.y + rowIndex;
+                            ctx.fillRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+                        }
+                    });
+                });
+            }
+
+            // Draw the score
+            function drawScore() {
+                ctx.fillStyle = '#333';
+                ctx.font = '24px Arial';
+                ctx.fillText(`Score: ${score}`, canvas.width / 2 - 40, 30);
+            }
+
+            // Draw the pause indicator
+            function drawPause() {
+                if (isPaused) {
+                    ctx.fillStyle = '#333';
+                    ctx.font = '24px Arial';
+                    ctx.fillText('Paused', canvas.width / 2 - 40, canvas.height / 2);
+                }
+            }
+
+            // Update the game state
+            function update() {
+                if (!isPaused) {
+                    if (canMoveDown()) {
+                        currentPiece.y++;
+                    } else {
+                        placePiece();
+                        newPiece();
+                        clearLines();
+                    }
+                    draw();
+                }
+            }
+
+            // Check if the current piece can move down
+            function canMoveDown() {
+                return currentPiece.y + currentPiece.shape.length < ROWS &&
+                    currentPiece.shape.every((row, rowIndex) =>
+                        row.every((block, colIndex) =>
+                            !block || (currentPiece.y + rowIndex + 1 < ROWS && !board[currentPiece.y + rowIndex + 1][currentPiece.x + colIndex])
+                        )
+                    );
+            }
+
+            // Place the current piece on the board
+            function placePiece() {
+                currentPiece.shape.forEach((row, rowIndex) => {
+                    row.forEach((block, colIndex) => {
+                        if (block) {
+                            const x = currentPiece.x + colIndex;
+                            const y = currentPiece.y + rowIndex;
+                            board[y][x] = 1;
+                        }
+                    });
+                });
+            }
+
+            // Clear completed lines
+            function clearLines() {
+                let linesCleared = 0;
+                for (let row = ROWS - 1; row >= 0; row--) {
+                    if (board[row].every(block => block)) {
+                        board.splice(row, 1);
+                        board.unshift(Array(COLUMNS).fill(0));
+                        playAudio('click.wav');
+                        linesCleared++;
+                    }
+                }
+                score += linesCleared * 100; // Increase score for each completed line
+            }
+            // Audio run on key Press
+            function playAudio(audioName) {
+                let audio = new Audio('./audio/' + audioName);
+                audio.play();
+            }
+            // Handle keyboard input
+            $(document).keydown(function (e) {
+                switch (e.which) {
+                    case 37: // Left arrow key
+                        if (!isPaused && canMoveLeft()) {
+                            currentPiece.x--;
+                            playAudio('blipSelect.wav');
+                            draw();
+                        }
+                        break;
+                    case 39: // Right arrow key
+                        if (!isPaused && canMoveRight()) {
+                            currentPiece.x++;
+                            playAudio('blipSelect.wav');
+                            draw();
+                        }
+                        break;
+                    case 38: // Up arrow key
+                        if (!isPaused) rotate();
+                        playAudio('powerUp.wav');
+                        break;
+                    case 40: // Down arrow key
+                        // Implement soft drop if desired
+                        if (!isPaused) softDrop();
+                        break;
+                    case 32: // Spacebar
+                        isPaused = !isPaused;
+                        playAudio('blipSelect.wav');
+                        draw();
+                        break;
+                    default:
+                        return; // Exit this handler for other keys
+                }
+                e.preventDefault(); // Prevent the default action (scrolling / moving the page)
+            });
+
+            // Check if the current piece can move left
+            function canMoveLeft() {
+                return currentPiece.x > 0 && currentPiece.shape.every((row, rowIndex) =>
+                    row.every((block, colIndex) =>
+                        !block || (currentPiece.x + colIndex - 1 >= 0 && !board[currentPiece.y + rowIndex][currentPiece.x + colIndex - 1])
+                    )
+                );
+            }
+            // Soft drop the current piece
+            function softDrop() {
+                while (canMoveDown()) {
+                    currentPiece.y++;
+                }
+                draw();
+            }
+            // Check if the current piece can move right
+            function canMoveRight() {
+                return currentPiece.x + currentPiece.shape[0].length <= COLUMNS && currentPiece.shape.every((row, rowIndex) =>
+                    row.every((block, colIndex) =>
+                        !block || (currentPiece.x + colIndex + 1 < COLUMNS && !board[currentPiece.y + rowIndex][currentPiece.x + colIndex + 1])
+                    )
+                );
+            }
+
+            // Rotate the current piece
+            function rotate() {
+                const rotatedPiece = [];
+                for (let col = 0; col < currentPiece.shape[0].length; col++) {
+                    const newRow = [];
+                    for (let row = currentPiece.shape.length - 1; row >= 0; row--) {
+                        newRow.push(currentPiece.shape[row][col]);
+                    }
+                    rotatedPiece.push(newRow);
+                }
+                currentPiece.shape = rotatedPiece;
+                draw();
+            }
+
+            // Start the game
+            init();
+        });
+
+    </script>
+</body>
+</html>
